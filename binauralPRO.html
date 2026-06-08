@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title> Binauralne Pro </title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+body {
+        font-family: Arial;
+        padding: 15pxl;
+        max-width: 500px;
+        marigin: auto;
+        background: teal;
+}
+label {
+        display: block; 
+        marigin-top: 10px;
+}
+button {
+        marigin: 5px;
+        padding: 10px;
+        font-size: 16px;
+}
+input[type=range]{
+        width: 100%;
+}
+.preset {
+        background: #eee;
+        }
+.main {
+        background: #4CAF50;
+        color: white;
+}
+</style>
+</head>
+<body>
+
+<h2>Binaural Beats</h2>
+
+<!-- PRESETY -->
+<h3> Presety </h3>
+<button class="preset" onclick="loadPreset(204,4,1,0.1)"> Spanko</button>
+<button class="preset" onclick="loadPreset(300,7,1,0.1)"> Relaks</button>
+<button class="preset" onclick="loadPreset(204,22,1,0.1)"> Skupienie</button>
+<button class="preset" onclick="loadPreset(396,8,0,0)"> FURIA</button>
+
+<!-- PARAMETRY -->
+<h3> Ustawienia </h3>
+
+<label> BASE: <span id="baseVal">204</span> Hz</label>
+<input type="range" id="base" min"100" max="600" value="204">
+
+<label> BEAT: <span id="beatVal">4</span> Hz</label>
+<input type="range" id="beat" min"1" max="30" value="4">
+
+<label> Mod depth: <span id="modDepthVal">1</span></label>
+<input type="range" id="modDepth" min"0" max="5" step="0.1" value="1">
+
+<label> Mod speed: <span id="modSpeedVal">0.10</span></label>
+<input type="range" id="modSpeed" min"0" step="0.01" max="1" value="0.01">
+
+<label> Pink noise level: <span id="noiseVal">0.00</span></label>
+<input type="range" id="noise" min"0" max="0.5" step="0.01" value="0">
+
+<label> Auto stop (minuty):</label>
+<input type="number" id="timer" value="0">
+
+<br> <br>
+
+<button class="main" onclick="start()">Start</button>
+<button class="main" onclick="stop()">Stop</button>
+
+<script>
+
+let audioCtx, leftOsc, rightOsc, gainNode;
+let modOsc, modGain;
+let noiseNode, noiseGain;
+let interval, stopTimeout;
+
+function updateLabels() {
+        baseVal.textContent = base.value;
+        beatVal.textContent = beat.value;
+        modDepthVal.textContent = modDepth.value;
+        modSpeedVal.textContent = modSpeed.value;
+        noiseVal.textContent = noise.value;
+}
+document.querySelectorAll("input").forEach(e => e.oninput = updateLabels);
+updateLabels();
+
+function loadPreset(baseF, beatF, depth, speed) {
+        base.value = baseF;
+        beat.value = beatF;
+        modDepth.value = depth;
+        modSpeed.value = speed;
+        updateLabels();
+}
+
+function createPinkNoise(ctx) {
+        let bufferSize = 4096;
+        let node = ctx.createScriptProcessor(bufferSize, 1, 1);
+        
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        
+        node.onaudioprocess = function(e) {
+                let out = e.outputBuffer.getChannelData(0);
+                for (let i=0; i <bufferSize; i++) {
+                        let white = Math.random() *2 -1;
+                        
+                        b0 = 0.99886 * b0 + white * 0.0555179;
+                        b1 = 0.99332 * b1 + white * 0.0750759;
+                        b2 = 0.96900 * b2 + white * 0.1538520;
+                        b3 = 0.86650 * b3 + white * 0.3104856;
+                        b4 = 0.55000 * b4 + white * 0.5329522;
+                        b5 = -0.7616 * b5 + white * 0.0168980;
+                        out[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+                        out[i] *= 0.11;
+                        b6 = white * 0.115926;
+                }
+        };
+        return node;
+}
+
+function start() {
+        if(!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        audioCtx.resume();
+        
+        if (leftOsc) return;
+        
+        leftOsc = audioCtx.createOscillator();
+        rightOsc = audioCtx.createOscillator();
+        modOsc = audioCtx.createOscillator();
+        modGain = audioCtx.createGain();
+        gainNode = audioCtx.createGain();
+        noiseGain = audioCtx.createGain();
+        leftOsc.type = "sine";
+        rightOsc.type = "sine";
+        
+        const merger = audioCtx.createChannelMerger(2);
+        
+        //modulacja
+        modOsc.connect(modGain);
+        modGain.connect(rightOsc.frequency);
+        
+        //binauralny routing
+        leftOsc.connect(merger,0,0);
+        rightOsc.connect(merger,0,1);       
+        
+        //pink noize
+        noiseNode = createPinkNoise(audioCtx);
+        noiseNode.connect(noiseGain);
+        noiseGain.connect(gainNode);
+        
+        // sumowanie
+        merger.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        // fader
+        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime +2);
+        
+        leftOsc.start();
+        rightOsc.start();
+        modOsc.start();
+        
+        // live update
+        interval = setInterval(() => {
+                let baseF = parseFloat(base.value);
+                let beatF = parseFloat(beat.value);
+                let modSpeedF = parseFloat(modSpeed.value);
+                let modDepthF = parseFloat(modDepth.value);
+                let noiseF = parseFloat(noise.value);
+                
+                leftOsc.frequency.setValueAtTime(baseF, audioCtx.currentTime);
+                rightOsc.frequency.setValueAtTime(baseF + beatF, audioCtx.currentTime);
+                modOsc.frequency.setValueAtTime(modSpeedF, audioCtx.currentTime);
+                modGain.gain.setValueAtTime(modDepthF, audioCtx.currentTime);
+                noiseGain.gain.setValueAtTime(noiseF, audioCtx.currentTime); 
+        }, 50);
+        
+        //auto stop
+        let minutes = parseFloat(timer.value);
+        if (minutes > 0) {
+                stopTimeout = setTimeout(stop, minutes * 60000);
+        }
+}
+
+function stop() {
+        if (!audioCtx) return;
+        
+        gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 2);
+        
+        setTimeout(() => {
+                clearInterval(interval);
+                
+                leftOsc.stop();
+                rightOsc.stop();
+                modOsc.stop();
+                noiseNode.disconnect();
+                
+                audioCtx.close();
+                audioCtx = null;
+                leftOsc = null;
+        }, 3000);
+        
+        if (stopTimeout) clearTimeout(stopTimeout);
+               
+}
+
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
