@@ -39,10 +39,10 @@ input[type=range]{
 
 <!-- PRESETY -->
 <h3> Presety </h3>
-<button class="preset" onclick="loadPreset(204,4,1,0.1)"> Spanko</button>
-<button class="preset" onclick="loadPreset(300,7,1,0.1)"> Relaks</button>
-<button class="preset" onclick="loadPreset(204,22,1,0.1)"> Skupienie</button>
-<button class="preset" onclick="loadPreset(396,8,0,0)"> FURIA</button>
+<button class="preset" onclick="loadPreset(204,4,1,0.1,0.05)"> Spanko</button>
+<button class="preset" onclick="loadPreset(300,7,1,0.1,0.2)"> Relaks</button>
+<button class="preset" onclick="loadPreset(204,22,1,0.1,0.3)"> Skupienie</button>
+<button class="preset" onclick="loadPreset(396,8,0,0,0.4)"> FURIA</button>
 
 <!-- PARAMETRY -->
 <h3> Ustawienia </h3>
@@ -87,11 +87,12 @@ function updateLabels() {
 document.querySelectorAll("input").forEach(e => e.oninput = updateLabels);
 updateLabels();
 
-function loadPreset(baseF, beatF, depth, speed) {
+function loadPreset(baseF, beatF, depth, speed, noize) {
         base.value = baseF;
         beat.value = beatF;
         modDepth.value = depth;
         modSpeed.value = speed;
+        noise.value = noize;
         updateLabels();
 }
 
